@@ -1,0 +1,78 @@
+{
+  "ver": "2.3.14",
+  "importer": "fbx",
+  "imported": true,
+  "uuid": "43538781-27db-43f0-abf2-8f0caa0c07f0",
+  "files": [],
+  "subMetas": {
+    "2f6d1": {
+      "importer": "gltf-mesh",
+      "uuid": "43538781-27db-43f0-abf2-8f0caa0c07f0@2f6d1",
+      "displayName": "",
+      "id": "2f6d1",
+      "name": "Cube.mesh",
+      "userData": {
+        "gltfIndex": 0,
+        "triangleCount": 108
+      },
+      "ver": "1.1.1",
+      "imported": true,
+      "files": [
+        ".bin",
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "98c4f": {
+      "importer": "gltf-scene",
+      "uuid": "43538781-27db-43f0-abf2-8f0caa0c07f0@98c4f",
+      "displayName": "",
+      "id": "98c4f",
+      "name": "BoardModel.prefab",
+      "userData": {
+        "gltfIndex": 0
+      },
+      "ver": "1.0.14",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "imageMetas": [],
+    "fbx": {
+      "smartMaterialEnabled": true
+    },
+    "lods": {
+      "enable": false,
+      "hasBuiltinLOD": false,
+      "options": [
+        {
+          "screenRatio": 0.25,
+          "faceCount": 1
+        },
+        {
+          "screenRatio": 0.125,
+          "faceCount": 0.25
+        },
+        {
+          "screenRatio": 0.01,
+          "faceCount": 0.1
+        }
+      ]
+    },
+    "assetFinder": {
+      "meshes": [
+        "43538781-27db-43f0-abf2-8f0caa0c07f0@2f6d1"
+      ],
+      "skeletons": [],
+      "textures": [],
+      "materials": [],
+      "scenes": [
+        "43538781-27db-43f0-abf2-8f0caa0c07f0@98c4f"
+      ]
+    }
+  }
+}
