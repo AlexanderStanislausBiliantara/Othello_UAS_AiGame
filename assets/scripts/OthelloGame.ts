@@ -136,7 +136,7 @@ export class OthelloGame extends Component {
             return;
         }
 
-        if (this.isLegalMove(row, col, this.currPlayer)) {
+        if (this.isLegalMove(row, col, this.currPlayer, this.boardState)) {
             this.executeMove(row, col, this.currPlayer);
             this.switchPlayer();
         }
@@ -144,10 +144,21 @@ export class OthelloGame extends Component {
         // return
     }
 
-    executeMove(row: number, col: number, player: PieceType) {
-        this.boardState[row][col] = player;
+    //a general apply move function
+    //needed for temp boards that will be calculated at minmax process
+    applyMove(row: number, col: number, player: PieceType, board: number[][]) {
+        board[row][col] = player;
+        const piecesToFlip = this.getFlippedPieces(row, col, player, board);
+        for (let pos of piecesToFlip) {
+            board[pos[0]][pos[1]] = player;
+        }
+        return piecesToFlip
+    }
 
-        const piecesToFlip = this.getFlippedPieces(row, col, player);
+    executeMove(row: number, col: number, player: PieceType) {
+        //applies the moves and also returns pieces to flip
+        let piecesToFlip = this.applyMove(row, col, player, this.boardState)
+
         for (let pos of piecesToFlip) {
             this.boardState[pos[0]][pos[1]] = player;
             this.updateDiskCOlor(pos[0], pos[1], player);
@@ -159,9 +170,9 @@ export class OthelloGame extends Component {
     }
 
     updateLegalMoveDisplay() {
-        for (let r = 0; r < this.boardState.length; r++) {
-            for (let c = 0; c < this.boardState[r].length; c++) {
-                if (this.isLegalMove(r, c, this.currPlayer)) {  //if a move is legal here now then show 
+        for (let r = 0; r < this.BOARD_SIZE; r++) {
+            for (let c = 0; c < this.BOARD_SIZE; c++) {
+                if (this.isLegalMove(r, c, this.currPlayer, this.boardState)) {  //if a move is legal here now then show 
                     this.legalMoves[r][c].active = true;
                 }
                 else {
@@ -171,23 +182,23 @@ export class OthelloGame extends Component {
         }
     }
 
-    getFlippedPieces(row: number, col: number, player: PieceType): number[][] {
+    getFlippedPieces(row: number, col: number, player: PieceType, board: number[][]): number[][] {
         let allFlipped: number[][] = [];
         for (let dir of DIRECTIONS) {
-            let flipped = this.checkDirections(row, col, dir[0], dir[1], player);
+            let flipped = this.checkDirections(row, col, dir[0], dir[1], player, board);
             allFlipped = allFlipped.concat(flipped);
         }
 
         return allFlipped;
     }
 
-    isLegalMove(row: number, col: number, player: PieceType): boolean {
-        if (this.boardState[row][col] !== PieceType.EMPTY) {
+    isLegalMove(row: number, col: number, player: PieceType, board: number[][]): boolean {
+        if (board[row][col] !== PieceType.EMPTY) {
             return false;
         }
 
         for (let dir of DIRECTIONS) {
-            if (this.checkDirections(row, col, dir[0], dir[1], player).length > 0) {
+            if (this.checkDirections(row, col, dir[0], dir[1], player, board).length > 0) {
                 return true;
             }
         }
@@ -195,7 +206,7 @@ export class OthelloGame extends Component {
         return false;
     }
 
-    checkDirections(row: number, col: number, dRow: number, dCol: number, player: PieceType): number[][] {
+    checkDirections(row: number, col: number, dRow: number, dCol: number, player: PieceType, board: number[][]): number[][] {
         let opponent = null;
         if (player === PieceType.BLACK) {
             opponent = PieceType.WHITE;
@@ -208,7 +219,7 @@ export class OthelloGame extends Component {
         let r = row + dRow;
         let c = col + dCol;
 
-        while (r >= 0 && r < this.BOARD_SIZE && c >= 0 && c < this.BOARD_SIZE && this.boardState[r][c] === opponent) {
+        while (r >= 0 && r < this.BOARD_SIZE && c >= 0 && c < this.BOARD_SIZE && board[r][c] === opponent) {
             flipped.push([r, c]);
             r += dRow;
             c += dCol;
@@ -218,7 +229,7 @@ export class OthelloGame extends Component {
             return [];
         }
 
-        if (this.boardState[r][c] === PieceType.EMPTY) {
+        if (board[r][c] === PieceType.EMPTY) {
             return [];
         }
 
@@ -286,7 +297,7 @@ export class OthelloGame extends Component {
     hasAnyLegalMoves(player: PieceType): boolean {
         for (let r = 0; r < this.BOARD_SIZE; ++r) {
             for (let c = 0; c < this.BOARD_SIZE; ++c) {
-                if (this.isLegalMove(r, c, player)) {
+                if (this.isLegalMove(r, c, player, this.boardState)) {
                     return true;
                 }
             }
@@ -335,9 +346,98 @@ export class OthelloGame extends Component {
         }
     }
 
+    AIMove() {
+
+        let bestScore = -Infinity;
+
+        let bestMoveR = -1;
+        let bestMoveC = -1;
+
+        for (let r = 0; r < this.BOARD_SIZE; r++) {
+            for (let c = 0; c < this.BOARD_SIZE; c++) {
+                if (this.isLegalMove(r, c, PieceType.WHITE, this.boardState)) {
+                    // create a copy of the board
+                    let newBoard = this.boardState.map(row => [...row]);
+                    this.applyMove(r, c, PieceType.WHITE, newBoard);
+                    let score = this.minmax(1, newBoard, PieceType.BLACK);
+                    if (score > bestScore) {
+                        bestScore = score
+                        bestMoveR = r;
+                        bestMoveC = c;
+                    }
+                }
+
+            }
+        }
+
+        this.executeMove(bestMoveR, bestMoveC, PieceType.WHITE);
+    }
+
+
+
+    minmax(depth: number, tempBoard: number[][], player: PieceType): number {
+        if (depth >= 3) {
+            return this.evaluateBoard(tempBoard)
+        } else {
+
+            let nextPlayer = player;
+            if (player == PieceType.BLACK) {
+                nextPlayer = PieceType.WHITE
+            } else {
+                nextPlayer = PieceType.BLACK
+            }
+
+            // White wants largest score
+            let bestScore = 0;
+            if (player == PieceType.WHITE) {
+                bestScore = -Infinity;
+            } else {
+                bestScore = Infinity;
+            }
+
+            let isLegalMoveAvailable = false;
+
+
+            for (let r = 0; r < this.BOARD_SIZE; r++) {
+                for (let c = 0; c < this.BOARD_SIZE; c++) {
+                    if (this.isLegalMove(r, c, player, tempBoard)) {
+                        isLegalMoveAvailable = true;
+                        // create a copy of the board
+                        let newBoard = tempBoard.map(row => [...row]);
+                        this.applyMove(r, c, player, newBoard);
+                        let score = this.minmax(depth + 1, newBoard, nextPlayer);
+
+                        if (player == PieceType.WHITE) {
+                            if (score > bestScore) {
+                                bestScore = score;
+                                // bestMoveR = r;
+                                // bestMoveC = c;
+                            }
+                        } else {
+                            if (score < bestScore) {
+                                bestScore = score;
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            if (!isLegalMoveAvailable) { //pass to next player
+                return this.minmax(depth + 1, tempBoard, nextPlayer);
+            }
+            return bestScore;
+        }
+    }
+
+    evaluateBoard(board: number[][]): number {
+        return 0;
+    }
+
     update(deltaTime: number) {
 
     }
+
 }
 
 
