@@ -7,6 +7,14 @@ enum PieceType {
     WHITE = 2
 }
 
+// Difficulty Level menentukan seberapa dalam AI menelusuri pohon Minimax.
+// Semakin dalam (lebih tinggi angkanya), semakin cerdas AI-nya.
+enum Difficulty {
+    EASY = 1,  // Depth 1: AI hanya lihat 1 langkah ke depan
+    MEDIUM = 4,  // Depth 4: AI lihat 4 langkah ke depan (default)
+    HARD = 6   // Depth 6: AI lihat 6 langkah ke depan
+}
+
 const DIRECTIONS = [
     [-1, -1], [-1, 0], [-1, 1],
     [0, -1], [0, 1],
@@ -34,12 +42,18 @@ export class OthelloGame extends Component {
     @property(Prefab)
     validMovePrefab: Prefab;
 
+    // Node panel berisi tombol Easy/Medium/Hard
+    @property(Node)
+    difficultyPanel: Node;
+
     private readonly BOARD_SIZE = 8;
     private readonly CELL_SIZE = 100;
     private readonly HALF_BOARD = 400;
 
     private boardState: number[][] = [];
     private currPlayer: PieceType = PieceType.BLACK;
+
+    private aiDepth: number = Difficulty.MEDIUM;
 
     private diskNodes: Node[][] = [];
     private uiTransform: UITransform;
@@ -52,6 +66,8 @@ export class OthelloGame extends Component {
         this.winnerLabel.node.active = false;
 
         this.updateScore();
+
+        if (this.difficultyPanel) this.difficultyPanel.active = true;
 
         this.node.on(Node.EventType.TOUCH_END, this.onBoardClick, this);
     }
@@ -108,6 +124,11 @@ export class OthelloGame extends Component {
     }
 
     resetBoard() {
+        if (this.difficultyPanel) this.difficultyPanel.active = true;
+        this.performReset();
+    }
+
+    private performReset() {
         this.node.removeAllChildren();
         this.currPlayer = PieceType.BLACK;
 
@@ -271,7 +292,7 @@ export class OthelloGame extends Component {
     }
 
     switchPlayer() {
-        let nextPlayer = null;
+        let nextPlayer: PieceType;
         if (this.currPlayer === PieceType.BLACK) {
             nextPlayer = PieceType.WHITE;
         } else {
@@ -284,17 +305,22 @@ export class OthelloGame extends Component {
                 this.updateLegalMoveDisplay();
                 return;
             } else {
+                if (this.currPlayer === PieceType.WHITE) {
+                    this.scheduleOnce(() => { this.AIMove(); }, 0.5);
+                }
+                this.updateLegalMoveDisplay();
                 return;
             }
         }
 
         this.currPlayer = nextPlayer;
         this.updateLegalMoveDisplay();
-        if (this.currPlayer == PieceType.WHITE) {
-            setTimeout(() => {
-                this.AIMove();
-            }, 1000);
 
+        // Jika giliran AI (WHITE), jalankan AIMove setelah jeda singkat
+        // Menggunakan scheduleOnce (native Cocos Creator) agar lebih stabil
+        // dibanding setTimeout di lingkungan browser Cocos
+        if (this.currPlayer === PieceType.WHITE) {
+            this.scheduleOnce(() => { this.AIMove(); }, 0.5);
         }
     }
 
@@ -351,26 +377,35 @@ export class OthelloGame extends Component {
     }
 
     AIMove() {
-
         let bestScore = -Infinity;
-
         let bestMoveR = -1;
         let bestMoveC = -1;
+
+        let alpha = -Infinity;
+        const beta = Infinity;
 
         for (let r = 0; r < this.BOARD_SIZE; r++) {
             for (let c = 0; c < this.BOARD_SIZE; c++) {
                 if (this.isLegalMove(r, c, PieceType.WHITE, this.boardState)) {
-                    // create a copy of the board
                     let newBoard = this.boardState.map(row => [...row]);
                     this.applyMove(r, c, PieceType.WHITE, newBoard);
-                    let score = this.minmax(1, newBoard, PieceType.BLACK);
+
+                    // Setelah WHITE bermain, giliran BLACK (MIN player, isMaximizing=false)
+                    // Kirim alpha & beta untuk memulai pruning dari level pertama
+                    // Kirim juga this.aiDepth sebagai batas kedalaman sesuai difficulty
+                    let score = this.minmax(1, newBoard, PieceType.BLACK, alpha, beta, this.aiDepth);
+
                     if (score > bestScore) {
-                        bestScore = score
+                        bestScore = score;
                         bestMoveR = r;
                         bestMoveC = c;
                     }
-                }
 
+                    // Cabang berikutnya tidak perlu dieksplorasi jika tidak bisa mengalahkan alpha saat ini
+                    if (bestScore > alpha) {
+                        alpha = bestScore;
+                    }
+                }
             }
         }
 
@@ -378,90 +413,215 @@ export class OthelloGame extends Component {
         this.switchPlayer();
     }
 
+    // Dipanggil oleh tombol Easy / Medium / Hard di scene
+    setDifficulty(event: any, customEventData?: string) {
+        let level = typeof event === 'number' ? event : parseInt(customEventData);
 
+        if (isNaN(level)) {
+            console.warn('[Difficulty] CustomEventData kosong, fallback ke Medium');
+            level = Difficulty.MEDIUM;
+        }
 
-    minmax(depth: number, tempBoard: number[][], player: PieceType): number {
-        if (depth >= 3) {
-            return this.evaluateBoard(tempBoard)
+        this.aiDepth = level;
+
+        if (this.difficultyPanel) this.difficultyPanel.active = false;
+        this.performReset();
+    }
+
+    // Minimax dengan Alpha-Beta Pruning
+    // alpha    : nilai terbaik yang sudah pasti bisa dicapai MAX player (WHITE)
+    // beta     : nilai terbaik yang sudah pasti bisa dicapai MIN player (BLACK)
+    // maxDepth : batas kedalaman pencarian, ditentukan oleh difficulty (Easy=1, Medium=4, Hard=6)
+    // Pruning terjadi di 3 kondisi:
+    //   1. Kondisi α-β : beta <= alpha = hentikan eksplorasi cabang saat ini
+    //   2. Depth limit : depth >= maxDepth = evaluasi state
+    //   3. Terminal    : tidak ada legal move untuk kedua player = evaluasi state
+    minmax(depth: number, tempBoard: number[][], player: PieceType, alpha: number, beta: number, maxDepth: number): number {
+
+        // Pruning 2: Depth limit
+        // Berhenti menelusuri jika sudah mencapai kedalaman maksimum sesuai difficulty
+        if (depth >= maxDepth) {
+            return this.evaluateBoard(tempBoard);
+        }
+
+        let nextPlayer: PieceType;
+        if (player == PieceType.BLACK) {
+            nextPlayer = PieceType.WHITE;
         } else {
+            nextPlayer = PieceType.BLACK;
+        }
 
-            let nextPlayer = player;
-            if (player == PieceType.BLACK) {
-                nextPlayer = PieceType.WHITE
-            } else {
-                nextPlayer = PieceType.BLACK
-            }
+        // WHITE adalah MAX player (skor lebih tinggi = lebih baik untuk AI)
+        // BLACK adalah MIN player (skor lebih rendah = lebih baik untuk lawan)
+        let bestScore = (player == PieceType.WHITE) ? -Infinity : Infinity;
+        let isLegalMoveAvailable = false;
 
-            // White wants largest score
-            let bestScore = 0;
-            if (player == PieceType.WHITE) {
-                bestScore = -Infinity;
-            } else {
-                bestScore = Infinity;
-            }
+        for (let r = 0; r < this.BOARD_SIZE; r++) {
+            for (let c = 0; c < this.BOARD_SIZE; c++) {
+                if (this.isLegalMove(r, c, player, tempBoard)) {
+                    isLegalMoveAvailable = true;
 
-            let isLegalMoveAvailable = false;
+                    // Buat salinan papan untuk simulasi tanpa mengubah state asli
+                    let newBoard = tempBoard.map(row => [...row]);
+                    this.applyMove(r, c, player, newBoard);
+                    let score = this.minmax(depth + 1, newBoard, nextPlayer, alpha, beta, maxDepth);
 
-
-            for (let r = 0; r < this.BOARD_SIZE; r++) {
-                for (let c = 0; c < this.BOARD_SIZE; c++) {
-                    if (this.isLegalMove(r, c, player, tempBoard)) {
-                        isLegalMoveAvailable = true;
-                        // create a copy of the board
-                        let newBoard = tempBoard.map(row => [...row]);
-                        this.applyMove(r, c, player, newBoard);
-                        let score = this.minmax(depth + 1, newBoard, nextPlayer);
-
-                        if (player == PieceType.WHITE) {
-                            if (score > bestScore) {
-                                bestScore = score;
-                                // bestMoveR = r;
-                                // bestMoveC = c;
-                            }
-                        } else {
-                            if (score < bestScore) {
-                                bestScore = score;
-                            }
+                    if (player == PieceType.WHITE) {
+                        // MAX player: update jika score lebih besar
+                        if (score > bestScore) {
+                            bestScore = score;
                         }
+                        // Update alpha — nilai terbaik yang sudah bisa dijamin MAX player
+                        if (bestScore > alpha) {
+                            alpha = bestScore;
+                        }
+                    } else {
+                        // MIN player: update jika score lebih kecil
+                        if (score < bestScore) {
+                            bestScore = score;
+                        }
+                        // Update beta - nilai terbaik yang sudah bisa dijamin MIN player
+                        if (bestScore < beta) {
+                            beta = bestScore;
+                        }
+                    }
+
+                    // Pruning 1: Alpha-Beta (β <= α)
+                    // MAX player tidak akan mendapat lebih dari beta dari langkah sebelum MIN,
+                    // dan MIN player tidak akan mendapat kurang dari alpha dari langkah sebelum MAX.
+                    // Jika kondisi ini terpenuhi, tidak perlu mengeksplorasi cabang lain.
+                    if (beta <= alpha) {
+                        break;
                     }
                 }
             }
 
-
-            if (!isLegalMoveAvailable) { //pass to next player
-                return this.minmax(depth + 1, tempBoard, nextPlayer);
+            //break loop luar jika sudah dipangkas
+            if (beta <= alpha) {
+                break;
             }
-            return bestScore;
         }
+
+        // Pruning 3: Terminal state (tidak ada legal move)
+        // Jika player saat ini tidak punya move, giliran dilewati ke player berikutnya.
+        // Jika player berikutnya tidak punya move, game berakhir = evaluasi.
+        if (!isLegalMoveAvailable) {
+            let nextHasMove = false;
+            for (let r = 0; r < this.BOARD_SIZE; r++) {
+                for (let c = 0; c < this.BOARD_SIZE; c++) {
+                    if (this.isLegalMove(r, c, nextPlayer, tempBoard)) {
+                        nextHasMove = true;
+                        break;
+                    }
+                }
+                if (nextHasMove) break;
+            }
+
+            if (!nextHasMove) {
+                // Kedua player tidak punya move = game over = evaluasi final
+                return this.evaluateBoard(tempBoard);
+            }
+
+            // Hanya player saat ini yang tidak punya move = skip giliran
+            return this.minmax(depth + 1, tempBoard, nextPlayer, alpha, beta, maxDepth);
+        }
+
+        return bestScore;
     }
 
     evaluateBoard(board: number[][]): number {
-        let score = randomRangeInt(-10, 10);
-        // Check corners
-        if (board[0][0] == PieceType.WHITE) {
-            score += 100;
-        } else if (board[0][0] == PieceType.BLACK) {
-            score -= 100;
+        // Variasi move: tambahkan noise kecil secara acak agar AI tidak selalu memilih
+        // move yang identik ketika beberapa move memiliki skor yang sama persis.
+        let score = randomRangeInt(-5, 5);
+
+        // 1. Corner Capture (+100 per pojok)
+        //    Pojok adalah posisi paling berharga karena tidak bisa dibalik.
+        const corners = [
+            [0, 0], [0, this.BOARD_SIZE - 1],
+            [this.BOARD_SIZE - 1, 0], [this.BOARD_SIZE - 1, this.BOARD_SIZE - 1]
+        ];
+        for (const [r, c] of corners) {
+            if (board[r][c] == PieceType.WHITE) {
+                score += 100;
+            } else if (board[r][c] == PieceType.BLACK) {
+                score -= 100;
+            }
         }
 
-        if (board[0][this.BOARD_SIZE - 1] == PieceType.WHITE) {
-            score += 100;
-        } else if (board[0][this.BOARD_SIZE - 1] == PieceType.BLACK) {
-            score -= 100;
+        // 2. Disc Count — Early vs Late Game
+        //    Early game (total keping < 30): sedikit keping lebih baik (-20 per selisih)
+        //    Late game  (total keping >= 30): banyak keping lebih baik (+20 per selisih)
+        let whiteDiscs = 0;
+        let blackDiscs = 0;
+        for (let r = 0; r < this.BOARD_SIZE; r++) {
+            for (let c = 0; c < this.BOARD_SIZE; c++) {
+                if (board[r][c] == PieceType.WHITE) whiteDiscs++;
+                else if (board[r][c] == PieceType.BLACK) blackDiscs++;
+            }
+        }
+        const totalDiscs = whiteDiscs + blackDiscs;
+        const discDiff = whiteDiscs - blackDiscs;
+
+        if (totalDiscs < 30) {
+            // Early game: AI lebih baik punya sedikit keping (skor dikurangi jika unggul keping)
+            score += discDiff * -20;
+        } else {
+            // Late game: AI lebih baik punya banyak keping (skor ditambah jika unggul keping)
+            score += discDiff * 20;
         }
 
-        if (board[this.BOARD_SIZE - 1][0] == PieceType.WHITE) {
-            score += 100;
-        } else if (board[this.BOARD_SIZE - 1][0] == PieceType.BLACK) {
-            score -= 100;
-        }
+        // 3. Island Count via DFS
+        //    Semakin sedikit island (kelompok keping terpisah), semakin bagus.
+        //    Island dihitung menggunakan algoritma DFS.
+        const whiteIslands = this.countIslands(board, PieceType.WHITE);
+        // Penalti -10 per island
+        score -= whiteIslands * 10;
 
-        if (board[this.BOARD_SIZE - 1][this.BOARD_SIZE - 1] == PieceType.WHITE) {
-            score += 100;
-        } else if (board[this.BOARD_SIZE - 1][this.BOARD_SIZE - 1] == PieceType.BLACK) {
-            score -= 100;
-        }
         return score;
+    }
+
+    // DFS untuk Island Count
+    // Menandai semua keping player yang terhubung ke (startR, startC) sebagai sudah dikunjungi
+    // Konektivitas 8-arah
+    dfsIsland(board: number[][], visited: boolean[][], startR: number, startC: number, player: PieceType): void {
+        const stack: [number, number][] = [[startR, startC]];
+        while (stack.length > 0) {
+            const [r, c] = stack.pop();
+            for (const [dr, dc] of DIRECTIONS) {
+                const nr = r + dr;
+                const nc = c + dc;
+                if (
+                    nr >= 0 && nr < this.BOARD_SIZE &&
+                    nc >= 0 && nc < this.BOARD_SIZE &&
+                    !visited[nr][nc] &&
+                    board[nr][nc] === player
+                ) {
+                    visited[nr][nc] = true;
+                    stack.push([nr, nc]);
+                }
+            }
+        }
+    }
+
+    // Menghitung jumlah island milik player menggunakan DFS
+    countIslands(board: number[][], player: PieceType): number {
+        // Buat grid visited 8x8
+        const visited: boolean[][] = Array.from({ length: this.BOARD_SIZE }, () =>
+            Array(this.BOARD_SIZE).fill(false)
+        );
+        let islands = 0;
+        for (let r = 0; r < this.BOARD_SIZE; r++) {
+            for (let c = 0; c < this.BOARD_SIZE; c++) {
+                // Jika menemukan keping player yang belum dikunjungi, itu adalah island baru
+                if (board[r][c] === player && !visited[r][c]) {
+                    islands++;
+                    visited[r][c] = true;
+                    // Tandai semua keping yang terhubung dengan DFS
+                    this.dfsIsland(board, visited, r, c, player);
+                }
+            }
+        }
+        return islands;
     }
 
     update(deltaTime: number) {
