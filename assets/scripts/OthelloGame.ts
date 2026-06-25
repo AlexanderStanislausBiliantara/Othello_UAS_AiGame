@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, UITransform, instantiate, Sprite, Color, EventTouch, Vec3, Label, Button } from 'cc';
+import { _decorator, Component, Node, Prefab, UITransform, instantiate, Sprite, Color, EventTouch, Vec3, Label, Button, random, randomRangeInt } from 'cc';
 const { ccclass, property } = _decorator;
 
 enum PieceType {
@@ -122,26 +122,23 @@ export class OthelloGame extends Component {
         this.updateScore();
     }
 
-    //if(player's turn){everything}
-    // else{return}
-    // commented for now, will be active when AI is finished
     onBoardClick(event: EventTouch) {
-        // if (this.currPlayer == PieceType.BLACK) {
-        const touchPos = event.getUILocation();
-        const localPos = this.uiTransform.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
-        const col = Math.floor((localPos.x + this.HALF_BOARD) / this.CELL_SIZE);
-        const row = this.BOARD_SIZE - 1 - Math.floor((localPos.y + this.HALF_BOARD) / this.CELL_SIZE);
+        if (this.currPlayer == PieceType.BLACK) {
+            const touchPos = event.getUILocation();
+            const localPos = this.uiTransform.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
+            const col = Math.floor((localPos.x + this.HALF_BOARD) / this.CELL_SIZE);
+            const row = this.BOARD_SIZE - 1 - Math.floor((localPos.y + this.HALF_BOARD) / this.CELL_SIZE);
 
-        if (row < 0 || row >= this.BOARD_SIZE || col < 0 || col >= this.BOARD_SIZE) {
-            return;
+            if (row < 0 || row >= this.BOARD_SIZE || col < 0 || col >= this.BOARD_SIZE) {
+                return;
+            }
+
+            if (this.isLegalMove(row, col, this.currPlayer, this.boardState)) {
+                this.executeMove(row, col, this.currPlayer);
+                this.switchPlayer();
+            }
         }
 
-        if (this.isLegalMove(row, col, this.currPlayer, this.boardState)) {
-            this.executeMove(row, col, this.currPlayer);
-            this.switchPlayer();
-        }
-        // }
-        // return
     }
 
     //a general apply move function
@@ -284,6 +281,7 @@ export class OthelloGame extends Component {
         if (!this.hasAnyLegalMoves(nextPlayer)) {
             if (!this.hasAnyLegalMoves(this.currPlayer)) {
                 this.triggerGameOver();
+                this.updateLegalMoveDisplay();
                 return;
             } else {
                 return;
@@ -292,6 +290,12 @@ export class OthelloGame extends Component {
 
         this.currPlayer = nextPlayer;
         this.updateLegalMoveDisplay();
+        if (this.currPlayer == PieceType.WHITE) {
+            setTimeout(() => {
+                this.AIMove();
+            }, 1000);
+
+        }
     }
 
     hasAnyLegalMoves(player: PieceType): boolean {
@@ -371,6 +375,7 @@ export class OthelloGame extends Component {
         }
 
         this.executeMove(bestMoveR, bestMoveC, PieceType.WHITE);
+        this.switchPlayer();
     }
 
 
@@ -431,7 +436,32 @@ export class OthelloGame extends Component {
     }
 
     evaluateBoard(board: number[][]): number {
-        return 0;
+        let score = randomRangeInt(-10, 10);
+        // Check corners
+        if (board[0][0] == PieceType.WHITE) {
+            score += 100;
+        } else if (board[0][0] == PieceType.BLACK) {
+            score -= 100;
+        }
+
+        if (board[0][this.BOARD_SIZE - 1] == PieceType.WHITE) {
+            score += 100;
+        } else if (board[0][this.BOARD_SIZE - 1] == PieceType.BLACK) {
+            score -= 100;
+        }
+
+        if (board[this.BOARD_SIZE - 1][0] == PieceType.WHITE) {
+            score += 100;
+        } else if (board[this.BOARD_SIZE - 1][0] == PieceType.BLACK) {
+            score -= 100;
+        }
+
+        if (board[this.BOARD_SIZE - 1][this.BOARD_SIZE - 1] == PieceType.WHITE) {
+            score += 100;
+        } else if (board[this.BOARD_SIZE - 1][this.BOARD_SIZE - 1] == PieceType.BLACK) {
+            score -= 100;
+        }
+        return score;
     }
 
     update(deltaTime: number) {

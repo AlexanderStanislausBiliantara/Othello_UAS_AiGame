@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "03d554c3-6575-490b-a766-50a04f4e58d9",
+  "uuid": "2551aab0-91e8-42e0-aa0b-b67a7f3c27b7",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "LegalMoveSprite"
+    "syncNodeName": "LegalMoveDisk"
   }
 }
