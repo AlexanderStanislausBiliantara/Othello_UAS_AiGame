@@ -10,7 +10,7 @@ enum PieceType {
 const DIRECTIONS = [
     [-1, -1], [-1, 0], [-1, 1],
     [0, -1], [0, 1],
-    [1, -1], [1,0], [1, 1]
+    [1, -1], [1, 0], [1, 1]
 ]
 
 @ccclass('OthelloGame')
@@ -31,6 +31,9 @@ export class OthelloGame extends Component {
     @property(Prefab)
     diskPrefab: Prefab;
 
+    @property(Prefab)
+    validMovePrefab: Prefab;
+
     private readonly BOARD_SIZE = 8;
     private readonly CELL_SIZE = 100;
     private readonly HALF_BOARD = 400;
@@ -40,6 +43,8 @@ export class OthelloGame extends Component {
 
     private diskNodes: Node[][] = [];
     private uiTransform: UITransform;
+
+    private legalMoves: Node[][] = [];
 
     start() {
         this.uiTransform = this.node.getComponent(UITransform);
@@ -64,13 +69,27 @@ export class OthelloGame extends Component {
     }
 
     initBoard() {
-        for (let r = 0;r < this.BOARD_SIZE;++r) {
+        for (let r = 0; r < this.BOARD_SIZE; ++r) {
             this.boardState[r] = [];
             this.diskNodes[r] = [];
-            
-            for (let c = 0;c < this.BOARD_SIZE;++c) {
+            this.legalMoves[r] = [];
+
+
+            for (let c = 0; c < this.BOARD_SIZE; ++c) {
                 this.boardState[r][c] = PieceType.EMPTY;
                 this.diskNodes[r][c] = null;
+
+                // fill the legalmove board with the pieces
+                // only show the legalmove circle if it's a legal move later on
+                const x = -this.HALF_BOARD + (c * this.CELL_SIZE) + (this.CELL_SIZE / 2);
+                const y = this.HALF_BOARD - (r * this.CELL_SIZE) - (this.CELL_SIZE / 2);
+
+                let diskNode: Node;
+                diskNode = instantiate(this.validMovePrefab);
+                this.node.addChild(diskNode);
+                this.legalMoves[r][c] = diskNode;
+                diskNode.setPosition(x, y, 0);
+                diskNode.active = false;
             }
         }
 
@@ -85,6 +104,7 @@ export class OthelloGame extends Component {
 
         this.boardState[4][4] = PieceType.WHITE;
         this.placeDisk(4, 4, PieceType.WHITE);
+        this.updateLegalMoveDisplay();
     }
 
     resetBoard() {
@@ -102,7 +122,11 @@ export class OthelloGame extends Component {
         this.updateScore();
     }
 
+    //if(player's turn){everything}
+    // else{return}
+    // commented for now, will be active when AI is finished
     onBoardClick(event: EventTouch) {
+        // if (this.currPlayer == PieceType.BLACK) {
         const touchPos = event.getUILocation();
         const localPos = this.uiTransform.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
         const col = Math.floor((localPos.x + this.HALF_BOARD) / this.CELL_SIZE);
@@ -116,6 +140,8 @@ export class OthelloGame extends Component {
             this.executeMove(row, col, this.currPlayer);
             this.switchPlayer();
         }
+        // }
+        // return
     }
 
     executeMove(row: number, col: number, player: PieceType) {
@@ -129,6 +155,20 @@ export class OthelloGame extends Component {
 
         this.placeDisk(row, col, player);
         this.updateScore();
+        this.updateLegalMoveDisplay();
+    }
+
+    updateLegalMoveDisplay() {
+        for (let r = 0; r < this.boardState.length; r++) {
+            for (let c = 0; c < this.boardState[r].length; c++) {
+                if (this.isLegalMove(r, c, this.currPlayer)) {  //if a move is legal here now then show 
+                    this.legalMoves[r][c].active = true;
+                }
+                else {
+                    this.legalMoves[r][c].active = false;       //if a move is not legal here now hide
+                }
+            }
+        }
     }
 
     getFlippedPieces(row: number, col: number, player: PieceType): number[][] {
@@ -185,6 +225,7 @@ export class OthelloGame extends Component {
         return flipped;
     }
 
+
     placeDisk(row: number, col: number, player: PieceType) {
         const x = -this.HALF_BOARD + (col * this.CELL_SIZE) + (this.CELL_SIZE / 2);
         const y = this.HALF_BOARD - (row * this.CELL_SIZE) - (this.CELL_SIZE / 2);
@@ -239,11 +280,12 @@ export class OthelloGame extends Component {
         }
 
         this.currPlayer = nextPlayer;
+        this.updateLegalMoveDisplay();
     }
 
     hasAnyLegalMoves(player: PieceType): boolean {
-        for (let r = 0;r < this.BOARD_SIZE;++r) {
-            for (let c = 0;c < this.BOARD_SIZE;++c) {
+        for (let r = 0; r < this.BOARD_SIZE; ++r) {
+            for (let c = 0; c < this.BOARD_SIZE; ++c) {
                 if (this.isLegalMove(r, c, player)) {
                     return true;
                 }
@@ -257,8 +299,8 @@ export class OthelloGame extends Component {
         let blackCount = 0;
         let whiteCount = 0;
 
-        for (let r = 0;r < this.BOARD_SIZE;++r) {
-            for (let c = 0;c < this.BOARD_SIZE;++c) {
+        for (let r = 0; r < this.BOARD_SIZE; ++r) {
+            for (let c = 0; c < this.BOARD_SIZE; ++c) {
                 if (this.boardState[r][c] === PieceType.BLACK) {
                     ++blackCount;
                 } else if (this.boardState[r][c] === PieceType.WHITE) {
@@ -294,7 +336,7 @@ export class OthelloGame extends Component {
     }
 
     update(deltaTime: number) {
-        
+
     }
 }
 
