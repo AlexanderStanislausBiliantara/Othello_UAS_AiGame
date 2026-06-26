@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.Prefab",
-    "_name": "LegalMoveSprite",
+    "_name": "LegalMoveDisk",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -13,7 +13,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "LegalMoveSprite",
+    "_name": "LegalMoveDisk",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -32,8 +32,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -750.723,
-      "y": -200.683,
+      "x": -752.205,
+      "y": -205.976,
       "z": 0
     },
     "_lrot": {
@@ -85,7 +85,7 @@
   },
   {
     "__type__": "cc.CompPrefabInfo",
-    "fileId": "bd3GD+Z8FEOJgUC/MeJBPB"
+    "fileId": "629IPpd/dAiK4/wM7Yq256"
   },
   {
     "__type__": "cc.Sprite",
@@ -130,7 +130,7 @@
   },
   {
     "__type__": "cc.CompPrefabInfo",
-    "fileId": "bftYvoWWdOkKIVQsrqpLEL"
+    "fileId": "42ppRELVJIX6CpPp9FiFWR"
   },
   {
     "__type__": "cc.PrefabInfo",
@@ -140,8 +140,7 @@
     "asset": {
       "__id__": 0
     },
-    "fileId": "b38J22vYJBpo89+Ck6O93b",
-    "instance": null,
+    "fileId": "8aDigHcXtJr4lyKWQBlYZk",
     "targetOverrides": null
   }
 ]
